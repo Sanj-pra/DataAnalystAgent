@@ -1,0 +1,197 @@
+"""
+Advanced Data Analysis Agent - Multi-Step Reasoning
+This shows more "agentic" behavior where the AI decides what to do next
+"""
+
+from data_agent import DataAnalysisAgent
+import json
+
+class AdvancedDataAgent(DataAnalysisAgent):
+    """
+    Extended agent with multi-step reasoning and tool selection
+    This demonstrates true "agentic" behavior
+    """
+    
+    def __init__(self, api_key, endpoint, deployment_name):
+        super().__init__(api_key, endpoint, deployment_name)
+        self.tools = {
+            "analyze_trends": self.analyze_trends,
+            "find_outliers": self.find_outliers,
+            "compare_categories": self.compare_categories,
+            "generate_summary": self.generate_summary
+        }
+    
+    def autonomous_analysis(self, goal):
+        """
+        Agent decides its own analysis steps to achieve a goal
+        This is the "agentic" part - the AI chooses what to do!
+        """
+        
+        planning_prompt = f"""You are analyzing this dataset:
+{self.get_data_summary()}
+
+User's Goal: {goal}
+
+Your available tools:
+1. analyze_trends - Find patterns over time
+2. find_outliers - Detect unusual values
+3. compare_categories - Compare different groups
+4. generate_summary - Create a report
+
+Task: Create a step-by-step analysis plan. Return ONLY a JSON array of steps.
+Format: [{{"step": 1, "tool": "tool_name", "reason": "why this helps"}}, ...]
+
+Example:
+[
+  {{"step": 1, "tool": "analyze_trends", "reason": "identify patterns over time"}},
+  {{"step": 2, "tool": "find_outliers", "reason": "check for anomalies"}}
+]
+"""
+        
+        # Ask AI to create a plan
+        response = self.client.chat.completions.create(
+            model=self.deployment_name,
+            messages=[
+                {"role": "system", "content": "You are a data analysis planning agent. Return only JSON."},
+                {"role": "user", "content": planning_prompt}
+            ],
+            temperature=0.3
+        )
+        
+        plan_text = response.choices[0].message.content
+        
+        # Extract JSON from response
+        try:
+            # Remove markdown code blocks if present
+            if "```json" in plan_text:
+                plan_text = plan_text.split("```json")[1].split("```")[0]
+            elif "```" in plan_text:
+                plan_text = plan_text.split("```")[1].split("```")[0]
+            
+            plan = json.loads(plan_text.strip())
+        except:
+            print("⚠️  AI didn't return valid JSON. Using default plan.")
+            plan = [
+                {"step": 1, "tool": "analyze_trends", "reason": "default analysis"},
+                {"step": 2, "tool": "generate_summary", "reason": "create report"}
+            ]
+        
+        print(f"\n🤖 Agent's Analysis Plan:")
+        print("=" * 60)
+        for step in plan:
+            print(f"Step {step['step']}: {step['tool']}")
+            print(f"   Reason: {step['reason']}")
+        print("=" * 60)
+        
+        # Execute the plan
+        results = []
+        for step in plan:
+            tool_name = step['tool']
+            if tool_name in self.tools:
+                print(f"\n▶️  Executing Step {step['step']}: {tool_name}")
+                result = self.tools[tool_name]()
+                results.append({
+                    "step": step['step'],
+                    "tool": tool_name,
+                    "result": result
+                })
+            else:
+                print(f"⚠️  Unknown tool: {tool_name}")
+        
+        # Final synthesis
+        synthesis_prompt = f"""Based on these analysis results, answer the user's goal:
+
+Goal: {goal}
+
+Results:
+{json.dumps(results, indent=2)}
+
+Provide a clear, actionable answer."""
+
+        final_response = self.client.chat.completions.create(
+            model=self.deployment_name,
+            messages=[
+                {"role": "user", "content": synthesis_prompt}
+            ],
+            temperature=0.7
+        )
+        
+        return final_response.choices[0].message.content
+    
+    # Tool implementations
+    def analyze_trends(self):
+        """Tool: Analyze trends in the data"""
+        return self.analyze("What are the main trends and patterns in this data over time?")
+    
+    def find_outliers(self):
+        """Tool: Find unusual or outlying values"""
+        return self.analyze("Are there any outliers or unusual values in this data? What might explain them?")
+    
+    def compare_categories(self):
+        """Tool: Compare different categories"""
+        if hasattr(self, 'data'):
+            columns = list(self.data.columns)
+            return self.analyze(f"Compare the different categories/groups in this data. What are the key differences?")
+        return "No data loaded"
+    
+    def generate_summary(self):
+        """Tool: Generate an executive summary"""
+        return self.analyze("Create a concise executive summary of the key findings in this data.")
+
+
+# Example usage
+def advanced_example():
+    """
+    Example showing autonomous agent behavior
+    """
+    
+    # ========== CONFIGURATION ==========
+    API_KEY = "your-api-key-here"
+    ENDPOINT = "https://your-resource-name.openai.azure.com/"
+    DEPLOYMENT_NAME = "your-deployment-name"
+    
+    # Initialize the advanced agent
+    agent = AdvancedDataAgent(
+        api_key=API_KEY,
+        endpoint=ENDPOINT,
+        deployment_name=DEPLOYMENT_NAME
+    )
+    
+    # Load data
+    agent.load_data('sample_sales_data.csv')
+    
+    # Give it a high-level goal - it will figure out the steps!
+    print("\n" + "="*60)
+    print("AUTONOMOUS ANALYSIS")
+    print("="*60)
+    
+    result = agent.autonomous_analysis(
+        "I need to understand which products are performing best and why. "
+        "Also identify any concerning patterns."
+    )
+    
+    print("\n" + "="*60)
+    print("FINAL INSIGHTS")
+    print("="*60)
+    print(result)
+
+
+if __name__ == "__main__":
+    print("""
+    ╔════════════════════════════════════════════════╗
+    ║      Advanced Agentic Data Analysis            ║
+    ║                                                ║
+    ║   The agent decides its own analysis steps!    ║
+    ╚════════════════════════════════════════════════╝
+    
+    This demonstrates true agentic behavior:
+    1. You give it a goal
+    2. It creates a plan
+    3. It executes the plan using tools
+    4. It synthesizes results
+    
+    Update the configuration in advanced_example() then run!
+    """)
+    
+    # Uncomment to run:
+    # advanced_example()
